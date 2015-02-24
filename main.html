@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Public Display Authentication</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <!-- Le styles -->
+    <link href="/bootstrap/assets/css/bootstrap.css" rel="stylesheet">
+    <style type="text/css">
+      body {
+        padding-top: 20px;
+        padding-bottom: 40px;
+      }
+
+      /* Custom container */
+      .container-narrow {
+        margin: 0 auto;
+        max-width: 700px;
+      }
+      .container-narrow > hr {
+        margin: 30px 0;
+      }
+
+      /* Main marketing message and sign up button */
+      .jumbotron {
+        margin: 60px 0;
+        text-align: center;
+      }
+      .jumbotron h1 {
+        font-size: 72px;
+        line-height: 1;
+      }
+      .jumbotron .btn {
+        font-size: 21px;
+        padding: 14px 24px;
+      }
+
+      /* Supporting marketing content */
+      .marketing {
+        margin: 60px 0;
+      }
+      .marketing p + h4 {
+        margin-top: 28px;
+      }
+    </style>
+    <link href="/bootstrap/assets/css/bootstrap-responsive.css" rel="stylesheet">
+
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="../assets/js/html5shiv.js"></script>
+    <![endif]-->
+
+    <!-- Fav and touch icons -->
+    <!--<link rel="apple-touch-icon-precomposed" sizes="144x144" href="/bootstrap/assets/ico/apple-touch-icon-144-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="114x114" href="/bootstrap/assets/ico/apple-touch-icon-114-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="72x72" href="/bootstrap/assets/ico/apple-touch-icon-72-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" href="/bootstrap/assets/ico/apple-touch-icon-57-precomposed.png">
+    <link rel="shortcut icon" href="/bootstrap/assets/ico/favicon.png">-->
+  </head>
+
+  <body>
+
+    <div class="container-narrow">
+
+      <div class="masthead">
+        <ul class="nav nav-pills pull-right">
+          <li class="active"><a href="#">Home</a></li>
+          <li><a href="about.html">About</a></li>
+          <li><a href="contact.html">Contact</a></li>
+        </ul>
+        <h3 class="muted">Public Display Authentication</h3>
+      </div>
+
+      <hr>
+
+      <div class="jumbotron">
+        <a class="btn btn-large btn-success" id='login' onClick="login()" href="#">Sign In</a>
+        <a class="btn btn-large btn-success" id='logout' onClick="startLogoutPolling()" href="#">Sign Out</a>
+        <a class="btn btn-large btn-success" id='getRoster' onClick="getRoster()" href="#">Get Roster</a>
+        <a class="btn btn-large btn-success" id='setRoster' onClick="setRoster()" href="#">Set Roster</a>
+        <a class="btn btn-large btn-success" id='setRoster' onClick="rm_from_Roster()" href="#">Remove Contact</a>
+        <a class="btn btn-large btn-success" id='scan' onClick="getScan()" href="#">Scan</a>
+        <a class="btn btn-large btn-success" id='sendAccessToken' onClick="sendAT()" href="#">Send Token</a>
+        <br/>
+        <b>Welcome:</b> <span id="uName" style="font-weight:bold;"></span>
+        <br/>
+        <b>State:</b> <span id="connstate" style="font-weight:bold;"></span>
+      </div>
+        <form id="send">
+        <label for="to">To:</label> <input id="to" /> @ <input id="to_server" />
+        <br />
+
+        <label for="phrase">Message:</label> <input id='phrase' type='text'/>
+        <br />
+
+        <a class="btn btn-large btn-success" id='send' onClick="sendMessage()" href="#">Send</a>
+        </form>
+        <div id="msgs"></div>
+
+    </div> <!-- /container -->
+
+    <!-- Le javascript
+    ================================================== -->
+    <!-- Placed at the end of the document so the pages load faster -->
+    <script src="/bootstrap/assets/js/jquery.js"></script>
+    <script src="/bootstrap/assets/js/bootstrap-transition.js"></script>
+    <script src="/bootstrap/assets/js/bootstrap-alert.js"></script>
+    <script src="/bootstrap/assets/js/bootstrap-modal.js"></script>
+    <script src="/bootstrap/assets/js/bootstrap-dropdown.js"></script>
+    <script src="/bootstrap/assets/js/bootstrap-scrollspy.js"></script>
+    <script src="/bootstrap/assets/js/bootstrap-tab.js"></script>
+    <script src="/bootstrap/assets/js/bootstrap-tooltip.js"></script>
+    <script src="/bootstrap/assets/js/bootstrap-popover.js"></script>
+    <script src="/bootstrap/assets/js/bootstrap-button.js"></script>
+    <script src="/bootstrap/assets/js/bootstrap-collapse.js"></script>
+    <script src="/bootstrap/assets/js/bootstrap-carousel.js"></script>
+    <script src="/bootstrap/assets/js/bootstrap-typeahead.js"></script>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.js"></script>
+    <script src="strophe.js" type="text/javascript"></script>
+        <script>
+        var OAUTHURL    =   'https://api.learning-layers.eu/o/oauth2/authorize?';
+        var VALIDURL    =   'https://api.learning-layers.eu/o/oauth2/token?access_token=';
+        var SCOPE       =   'openid email profile message.send roster.get roster.add';
+        //var SCOPE = 'openid email profile';
+        var CLIENTID    =   '849a9248-4e38-4fad-81b9-6d50aae914c6';
+        //var REDIRECT    =   'http://127.0.0.1'
+        var REDIRECT    =   'https://pd.ngrok.com/'
+        var TYPE        =   'token';
+        var _url        =   OAUTHURL + 'response_type=id_token%20token&client_id=' + CLIENTID + '&scope=' + SCOPE;
+        var acToken;
+        var idtoken;
+        var user;
+        var scopes;
+        var connection = null;
+        var win = null;
+
+        //connection = new Strophe.Connection("https://localhost:5281/http-bind");
+        connection = new Strophe.Connection("https://137.226.58.48:5275/http-bind");
+        $('#logout').hide();
+        function login() {
+
+            win         =   window.open(_url, "window", 'width=800, height=600'); 
+            var pollTimer   =   window.setInterval(function() { 
+            try {
+
+                   // if (win.document.URL.indexOf(REDIRECT) != -1) {
+                        window.clearInterval(pollTimer);
+                        var url =   win.document.URL;
+                        console.log(url);
+
+                        //saving access token and ID token for later use.
+                        acToken =   gup(url, 'access_token');
+                        idtoken = gup(url, 'id_token');
+                        
+     win.close();
+
+      //checking the values of the variables before calling getUserInfo() function.
+      if(acToken != null && idtoken != null){   
+                getUserInfo(acToken);        
+      } else {
+        console.log("Error in login");
+      }
+
+     win.close();
+            //  }
+                } catch(e) {
+                }
+           }, 500);
+        }
+
+
+  // this is validation function which is use to validate the access token 
+        function validateToken(token) {
+            $.ajax({
+                url: VALIDURL +  acToken,
+            data:null,
+                success: function(responseText){
+                    //getUserInfo();
+                },
+                dataType: "json"  
+            });
+        }
+
+  // get the user information(profile name, email and etc) from the access token which is provided by OIDC server.
+        function getUserInfo(acToken) {
+
+        connection.connect('ramani@137.226.58.48', acToken, function(cond, status) {         
+                             if (cond === 0) {
+                                 console.log("Error");
+                                 $('#connstate').html('ERROR');
+                             } else if (cond === 1) {
+                                 console.log("Connecting");
+                                 $('#connstate').html('Connecting');
+                             } else if (cond === 2) {
+                                 console.log("Connection Failed");
+                                 $('#connstate').html('Connection Failed');
+                             } else if (cond === 3) {
+                                 console.log("Authenticating");
+                                 $('#connstate').html('Authenticating');
+                             } else if (cond === 4) {
+                                 console.log("Auth Failed");
+                                 $('#connstate').html('Auth Failed');
+                             } else if (cond === 5) {
+                                 console.log("Connected");
+                                 $('#connstate').html('Connected')
+                                 connection.addHandler(onMessage, null, 'message', null, null,  null);
+                                 connection.addHandler(onIQ, null, 'iq', null, null,  null);
+                                 console.log("sending presence tree...");
+                                 connection.send($pres().tree());
+                             } else if (cond === 6) {
+                                 console.log("disconnected");
+                                 $('#connstate').html('Disconnected');
+                             } else if (cond === 7) {
+                                 console.log("disconnecting");
+                                 $('#connstate').html('Disconnecting');
+                             } else if (cond === 8) {
+                                 console.log("Attached");
+                                 $('#connstate').html('Attached');
+                             }
+
+                             if (status) {
+                                console.log(status);
+                             }
+                             return true;
+                         });
+
+            console.log(acToken);
+            $.ajax({
+                url: 'https://api.learning-layers.eu/o/oauth2/userinfo?access_token=' + acToken ,
+                success: function(resp) {
+                    user    =   resp;
+                    $('#login').hide();
+                    $('#logout').show();
+                    $('#uName').text(user.name);
+                },
+                dataType: "json"
+            });
+
+           //sendAT(acToken);
+            
+        }
+
+//just for the test purpose
+function getScopes(acToken) {
+    $.ajax
+        ({
+            type: "POST",
+            url: "https://api.learning-layers.eu/o/oauth2/introspect?token=" + acToken,
+            //&token_type_hint=access_token",
+            dataType: "json",
+            async: false,
+            headers: {"Authorization": "Basic ODQ5YTkyNDgtNGUzOC00ZmFkLTgxYjktNmQ1MGFhZTkxNGM2OlhtYVFQR2pYSno4SU9hV1QwQW1tanRmTDVEaTNJMlpPTjk1MEFEVEs5X3pHVjZYWS1YaWJKd3o4ZjdPaVFhLUQya25uc2xxM0NGQmRXMGItVnBPa2pR", "Content-Type": "application/x-www-form-urlencoded"},
+            success: function (resp){
+                scopes = resp;
+            }
+        });
+    }
+
+  // to parse the URL and get the relevant information e.g. access token and ID token.
+        function gup(url, name) {
+  name = name.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
+            var regexS = "[\\#&]"+name+"=([^&#]*)";
+            var regex = new RegExp( regexS );
+            var results = regex.exec( url );
+            if( results == null )
+                return "";
+            else
+                return results[1];
+        }
+
+        function startLogoutPolling() {
+            connection.disconnect();
+            connection.flush();
+            $('#login').show();
+            $('#logout').hide();
+            $('#uName').text('');
+            $('#connstate').text('');
+        }
+
+        function revokeToken(){
+
+            $.ajax
+            ({
+                type: "POST",
+                url: "https://api.learning-layers.eu/o/oauth2/revoke?token=" + acToken,
+                dataType: "json",
+                async: false,
+                headers: {"Authorization": "Basic ODQ5YTkyNDgtNGUzOC00ZmFkLTgxYjktNmQ1MGFhZTkxNGM2OlhtYVFQR2pYSno4SU9hV1QwQW1tanRmTDVEaTNJMlpPTjk1MEFEVEs5X3pHVjZYWS1YaWJKd3o4ZjdPaVFhLUQya25uc2xxM0NGQmRXMGItVnBPa2pR", "Accept": "application/json", "content-type": "application/x-www-form-urlencoded"},
+                success: function (){         
+                }
+            });            
+        }
+
+        function sendMessage(){
+            var username = (user.preferred_username).concat("@137.226.58.48");
+            var msg = $("#phrase").val();
+            var to = $("#to").val() + "@" + $('#to_server').val();
+            var message = $msg({to: to, from: username, type: "chat"}).c("body", {xmlns: Strophe.NS.CLIENT}).t(msg);
+            connection.send(message.tree());
+            $("#phrase").val("");
+            $("#to").val("");
+            $('#to_server').val("");
+        }
+
+        function sendAT(){
+            //alert(token);
+            var username = "ramani@137.226.58.48";
+            var message = $msg({to: "ramani@cloud48.dbis.rwth-aachen.de", from: username, type: "token"}).c("body", {xmlns: Strophe.NS.CLIENT}).t(acToken);
+            connection.send(message.tree());
+            //alert(token);
+        }
+
+        function logOut(){
+          console.log("inside logout");
+          var username = (user.preferred_username).concat("@137.226.58.48");
+          var message = $msg({to: "ramani@cloud48.dbis.rwth-aachen.de", from: username, type: "logout"}).c("body", {xmlns: Strophe.NS.CLIENT}).t("logout");
+          connection.send(message.tree());
+          console.log(message);
+
+        }
+
+        function onMessage(msg) {
+            var to = msg.getAttribute('to');
+            var from = msg.getAttribute('from');
+            var type = msg.getAttribute('type');
+            var elems = msg.getElementsByTagName('body');
+            var fromJID = Strophe.getBareJidFromJid(from);
+
+            console.log(msg); 
+
+            if (type == "chat" && elems.length > 0) {
+                var body = elems[0];
+
+                $("#msgs").prepend("<p><strong>" + fromJID + "</strong>: " + Strophe.getText(body) + "</p>");  
+            }
+
+            if (type == "error" && elems.length > 0) {
+
+                $("#msgs").prepend("<p><strong>" + fromJID + "</strong>: " + Strophe.getText(type) + "</p>");  
+            }
+
+            // return true to keep the handler alive.  
+            // returning false would remove it after it finishes.
+            return true;
+        }
+
+        function onIQ(iq){
+            console.log(iq);
+
+            x=iq.getElementsByTagName('item');
+
+            for (i=0;i<x.length;i++)
+            {
+              $("#msgs").prepend("<p><strong>" + "server" + "</strong>: " + x[i].getAttribute('jid') + "</p>");
+            }
+            // return true to keep the handler alive.  
+            // returning false would remove it after it finishes.
+            return true;
+        }
+
+        var w;
+        function getScan(){
+            //var w;
+           //var href; 
+           //var href=window.location.href;
+           //var ptr=href.lastIndexOf("#");
+           // if(ptr>0){
+           //     href=href.substr(0,ptr);
+           // }
+            //w=window.open("zxing://scan/?ret="+escape("{CODE}"));
+          //w=window.open("zxing://scan/?ret="+escape(href+"{CODE}"));
+           //w=window.open("zxing://scan/?ret="+escape("{CODE}"));
+
+          w=window.open("zxing://scan/?");
+
+          w.close();
+  
+          getScanResult();
+        }
+
+        function getScanResult(){
+
+          var barcode = w.document.body.innerHTML;
+          barcode=barcode.substr(0,barcode.length-1); 
+
+          //w.close();
+          //alert(barcode);
+          sendAT(barcode);
+
+        }
+
+        function getRoster(){
+          var iq = $iq({type: 'get'}).c('query', {xmlns: 'jabber:iq:roster'});
+          connection.sendIQ(iq);
+          connection.send($pres());
+        }
+
+        function setRoster(){
+          var jid = prompt("Enter the jid", "test@example.com");
+          var iq = $iq({type: 'set'}).c('query', {xmlns: 'jabber:iq:roster'}).c('item', {jid:jid, flag:'add'});
+          connection.sendIQ(iq);
+          connection.send($pres());
+        }
+
+        function rm_from_Roster(){
+          var jid = prompt("Enter the jid", "test@example.com");
+          var iq = $iq({type: 'set'}).c('query', {xmlns: 'jabber:iq:roster'}).c('item', {jid:jid, subscription:'remove'});
+          connection.sendIQ(iq);
+          connection.send($pres());
+        }
+
+    </script>
+
+  </body>
+</html>
